@@ -46,15 +46,18 @@ local DEFAULTS = {
 -- in the menu are kept.
 local PLUGIN_DIR = (debug.getinfo(1, "S").source:match("^@(.*)/[^/]*$")) or "."
 
+-- Compact layout: the lemma is already shown big in the popup's word line,
+-- so the body starts with a small grey "part of speech · IPA · level" line.
 local RESULT_CSS = [[
-.hw { font-size: 1.45em; font-weight: bold; margin: 0.1em 0 0 0; }
-.sub { color: #555; margin: 0.1em 0 0.5em 0; }
-.lbl { font-weight: bold; margin: 0.7em 0 0.15em 0; }
-p { margin: 0.15em 0; }
-.why { color: #555; font-size: 0.9em; }
-hr { border: 0; border-top: 1px solid #999; margin: 0.8em 0 0.2em 0; }
+body { font-size: 0.86em; line-height: 1.25; }
+.sub { color: #666; font-size: 0.85em; margin: 0 0 0.35em 0; }
+.lbl { color: #555; font-weight: bold; font-size: 0.72em; margin: 0.55em 0 0.05em 0; }
+p { margin: 0.05em 0; text-align: left; }
+.vi { font-weight: bold; }
+.why { color: #555; font-size: 0.88em; margin-top: 0.15em; }
+hr { border: 0; border-top: 1px solid #bbb; margin: 0.6em 0 0 0; }
 .ex { font-style: italic; }
-.foot { color: #666; font-size: 0.85em; margin-top: 0.9em; }
+.foot { color: #777; font-size: 0.78em; margin-top: 0.6em; }
 ]]
 
 -- JSON nulls/numbers/etc. are ignored: only non-empty strings are kept.
@@ -504,42 +507,39 @@ function ContextDict:renderHtml(word, ctx, res)
 
     local h = {}
     local function add(s) h[#h + 1] = s end
-    local function section(label, value, class)
-        if str(value) then
-            add('<div class="lbl">' .. esc(label) .. '</div><p' ..
-                (class and (' class="' .. class .. '"') or '') .. '>' .. esc(value) .. '</p>')
-        end
-    end
 
-    add('<div class="hw">' .. esc(str(res.lemma) or str(res.word) or word) .. '</div>')
     local sub = {}
     if str(res.part_of_speech) then
         local pos = res.part_of_speech
         sub[#sub + 1] = esc(pos:sub(1, 1):upper() .. pos:sub(2))
     end
     if str(res.ipa) then sub[#sub + 1] = esc(res.ipa) end
-    sub[#sub + 1] = ctx and "Contextual meaning" or "General meaning"
-    add('<div class="sub">' .. table.concat(sub, " · ") .. '</div>')
+    if str(res.cefr_level) then sub[#sub + 1] = esc(res.cefr_level) end
+    if not ctx then sub[#sub + 1] = "nghĩa chung" end
+    if #sub > 0 then
+        add('<div class="sub">' .. table.concat(sub, " · ") .. '</div>')
+    end
 
-    local level = str(res.cefr_level)
-    section(level and ("English (" .. level .. ")") or "English", res.meaning_en)
-    section("Tiếng Việt", res.meaning_vi)
+    -- Vietnamese first (what the reader needs), then the simple English.
+    if str(res.meaning_vi) then add('<p class="vi">' .. esc(res.meaning_vi) .. '</p>') end
+    if str(res.meaning_en) then add('<p>' .. esc(res.meaning_en) .. '</p>') end
+
     if str(res.sentence_vi) or str(res.explanation_vi) then
-        add('<div class="lbl">Trong ngữ cảnh này</div>')
+        add('<div class="lbl">TRONG CÂU NÀY</div>')
         if str(res.sentence_vi) then add('<p>' .. esc(res.sentence_vi) .. '</p>') end
         if str(res.explanation_vi) then add('<p class="why">' .. esc(res.explanation_vi) .. '</p>') end
     end
 
     local examples = type(res.examples) == "table" and res.examples or {}
-    local shown_hr = false
+    local shown_label = false
     for _, ex in ipairs(examples) do
         if type(ex) == "table" and str(ex.en) then
-            if not shown_hr then
-                add('<hr/><div class="lbl">Example</div>')
-                shown_hr = true
+            if not shown_label then
+                add('<div class="lbl">VÍ DỤ</div>')
+                shown_label = true
             end
             add('<p class="ex">' .. esc(ex.en) .. '</p>')
-            if str(ex.vi) then add('<p>' .. esc(ex.vi) .. '</p>') end
+            if str(ex.vi) then add('<p class="why">' .. esc(ex.vi) .. '</p>') end
         end
     end
 
@@ -549,11 +549,9 @@ function ContextDict:renderHtml(word, ctx, res)
             if str(m) then others[#others + 1] = esc(m) end
         end
         if #others > 0 then
-            add('<p class="foot">Nghĩa khác: ' .. table.concat(others, "; ") .. '</p>')
+            add('<hr/><p class="foot">Nghĩa khác: ' .. table.concat(others, " · ") .. '</p>')
         end
     end
-    add('<p class="foot">' .. (ctx and "Context-aware explanation" or
-        "Không lấy được ngữ cảnh trong sách: giải nghĩa chung.") .. '</p>')
     return table.concat(h, "\n")
 end
 
