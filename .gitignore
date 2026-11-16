@@ -1,0 +1,7 @@
+.env.local
+.env*.local
+.vercel
+node_modules
+.DS_Store
+# per-device plugin config (contains your API token)
+contextdict.koplugin/config.lua
